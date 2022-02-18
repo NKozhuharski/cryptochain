@@ -1,8 +1,6 @@
 const Transaction = require("./transaction");
 const Wallet = require("./index");
-const {
-  verifySignature
-} = require("../util");
+const { verifySignature } = require("../util");
 const e = require("express");
 
 describe("Transaction", () => {
@@ -15,7 +13,7 @@ describe("Transaction", () => {
     transaction = new Transaction({
       senderWallet,
       recipient,
-      amount
+      amount,
     });
   });
 
@@ -44,24 +42,24 @@ describe("Transaction", () => {
       expect(transaction).toHaveProperty("input");
     });
 
-    it('has a `timestamp` in the input', () => {
-      expect(transaction.input).toHaveProperty('timestamp')
+    it("has a `timestamp` in the input", () => {
+      expect(transaction.input).toHaveProperty("timestamp");
     });
 
-    it('sets the `amount` to the `senderWallet` balance', () => {
-      expect(transaction.input.amount).toEqual(senderWallet.balance)
+    it("sets the `amount` to the `senderWallet` balance", () => {
+      expect(transaction.input.amount).toEqual(senderWallet.balance);
     });
 
-    it('sets the `address` to the `senderWallet` publicKey', () => {
+    it("sets the `address` to the `senderWallet` publicKey", () => {
       expect(transaction.input.address).toEqual(senderWallet.publicKey);
     });
 
-    it('signs the input', () => {
+    it("signs the input", () => {
       expect(
         verifySignature({
           publicKey: senderWallet.publicKey,
           data: transaction.outputMap,
-          signature: transaction.input.signature
+          signature: transaction.input.signature,
         })
       ).toBe(true);
     });
@@ -72,20 +70,18 @@ describe("Transaction", () => {
     errorMock = jest.fn();
 
     global.console.error = errorMock;
-  })
+  });
 
-
-  describe('validTransaction()', () => {
-
-    describe('when the transaction is valid', () => {
-      it('returns true', () => {
+  describe("validTransaction()", () => {
+    describe("when the transaction is valid", () => {
+      it("returns true", () => {
         expect(Transaction.validTransaction(transaction)).toBe(true);
       });
     });
 
-    describe('when the transaction is invalid', () => {
-      describe('and a transaction outputMap value is invalid', () => {
-        it('return false and logs an error', () => {
+    describe("when the transaction is invalid", () => {
+      describe("and a transaction outputMap value is invalid", () => {
+        it("return false and logs an error", () => {
           transaction.outputMap[senderWallet.publicKey] = 9999999;
 
           expect(Transaction.validTransaction(transaction)).toBe(false);
@@ -93,13 +89,88 @@ describe("Transaction", () => {
         });
       });
 
-      describe('and a transaction signature is invalid', () => {
-        it('return false and logs an error', () => {
-          transaction.input.signature = new Wallet().sign('data');
+      describe("and a transaction signature is invalid", () => {
+        it("return false and logs an error", () => {
+          transaction.input.signature = new Wallet().sign("data");
 
           expect(Transaction.validTransaction(transaction)).toBe(false);
           expect(errorMock).toHaveBeenCalled();
         });
+      });
+    });
+  });
+
+  describe("update()", () => {
+    let originalSignature, originalSenderOutput, nextRecipient, nextAmount;
+
+    describe("and the amount is invalid", () => {
+      it("throws an error", () => {
+        expect(() => {
+          transaction.update({
+            senderWallet,
+            recipient: "foo",
+            amount: 99999999,
+          });
+        }).toThrow("Amount exceeds balance");
+      });
+    });
+    beforeEach(() => {
+      originalSignature = transaction.input.signature;
+      originalSenderOutput = transaction.outputMap[senderWallet.publicKey];
+      nextRecipient = "next-recipient";
+      nextAmount = 50;
+
+      transaction.update({
+        senderWallet,
+        recipient: nextRecipient,
+        amount: nextAmount,
+      });
+    });
+
+    it("outputs the amount to the next recipient", () => {
+      expect(transaction.outputMap[nextRecipient]).toEqual(nextAmount);
+    });
+
+    it("subtracts the amount from the original sender output amount", () => {
+      expect(transaction.outputMap[senderWallet.publicKey]).toEqual(
+        originalSenderOutput - nextAmount
+      );
+    });
+
+    it("maintains a total output that matches the input amount", () => {
+      expect(
+        Object.values(transaction.outputMap).reduce(
+          (total, outputAmount) => total + outputAmount
+        )
+      ).toEqual(transaction.input.amount);
+    });
+
+    it("re-signs the transaction", () => {
+      expect(transaction.input.signature).not.toEqual(originalSignature);
+    });
+
+    describe("and another update for the same recipient", () => {
+      let addedAmount;
+
+      beforeEach(() => {
+        addedAmount = 80;
+
+        transaction.update({
+          senderWallet,
+          recipient: nextRecipient,
+          amount: addedAmount,
+        });
+      });
+
+      it("adds to the recipient amount", () => {
+        expect(transaction.outputMap[nextRecipient])
+        .toEqual(nextAmount + addedAmount);
+      });
+
+      it("subtracts the amount from the original sender output amount", () => {
+        expect(transaction.outputMap[senderWallet.publicKey]).toEqual(
+          originalSenderOutput - nextAmount - addedAmount
+        );
       });
     });
   });
