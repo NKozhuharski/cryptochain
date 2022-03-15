@@ -63,7 +63,7 @@ class Block extends Component {
     return (
       <div className="Block">
         <div>Hash: {hashDisplay}</div>
-        <div>Timestamp: {new Date(timestamp).toLocaleString()}</div>
+        <div>Timestamp: {new Date(timestamp).ocaleString()}</div>
         {this.displayTransaction}
       </div>
     );
